@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Travel Bag Sifnos - Cloud Dispatcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        .brand-bg { background-color: #0d4a6f; }
+        @media print {
+            body * { visibility: hidden; }
+            #printableVoucher, #printableVoucher * { visibility: visible; }
+            #printableVoucher { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800">
+
+    <!-- Header -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-40 border-b border-sky-900/50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-3">
+            <div class="flex items-center gap-3">
+                <div class="bg-sky-900/80 p-2 rounded-xl border border-sky-500/30 flex items-center justify-center shadow-inner">
+                    <span class="text-white font-bold text-lg tracking-wider flex items-center gap-1.5">
+                        <i class="fa-solid fa-bag-shopping text-amber-400"></i> Travel Bag <span class="text-xs font-normal text-amber-300">Sifnos</span>
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-medium text-slate-400 hidden sm:inline">Cloud Dispatcher</span>
+                    <span id="syncIndicator" class="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full"><i class="fa-solid fa-cloud"></i> Synced</span>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+                <button onclick="fetchDataFromCloud()" class="bg-slate-800 hover:bg-slate-700 text-sky-400 border border-sky-500/30 font-medium px-3 py-2 rounded-lg text-sm transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-rotate"></i> Sync
+                </button>
+                <button onclick="openSettingsModal('routes')" class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 font-medium px-3 py-2 rounded-lg text-sm transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-sliders"></i> Settings
+                </button>
+                <button onclick="openManifestModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium px-3 py-2 rounded-lg text-sm transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-list-check"></i> Driver Manifest
+                </button>
+                <button onclick="openManagerReportModal()" class="bg-sky-800 hover:bg-sky-700 text-white font-semibold px-3 py-2 rounded-lg text-sm transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-chart-pie"></i> Manager Report
+                </button>
+                <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-sm shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-excel"></i> Excel
+                </button>
+                <button onclick="openBookingModal()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-4 py-2 rounded-lg shadow transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i> New Booking
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-900">
+                <div class="text-xs text-slate-500 uppercase font-semibold">Total Bookings</div>
+                <div id="statTotalCount" class="text-2xl font-bold text-slate-800 mt-1">0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-amber-500">
+                <div class="text-xs text-slate-500 uppercase font-semibold">Gross Revenue</div>
+                <div id="statTotalGross" class="text-2xl font-bold text-slate-900 mt-1">€0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-rose-500">
+                <div class="text-xs text-slate-500 uppercase font-semibold">Commissions Fee</div>
+                <div id="statTotalFee" class="text-2xl font-bold text-rose-600 mt-1">€0</div>
+            </div>
+            <div class="bg-white p-4 rounded-xl shadow-sm border-l-4 border-emerald-500">
+                <div class="text-xs text-slate-500 uppercase font-semibold">Net Income</div>
+                <div id="statTotalNet" class="text-2xl font-bold text-emerald-600 mt-1">€0</div>
+            </div>
+        </div>
+
+        <!-- Filter Bar -->
+        <div class="bg-white p-4 rounded-xl shadow-sm mb-6 flex flex-wrap gap-3 items-center justify-between">
+            <div class="flex flex-wrap gap-2 items-center flex-1">
+                <div class="flex items-center gap-1">
+                    <input type="date" id="filterDate" onchange="renderTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700">
+                    <button onclick="setQuickDate('today')" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-2 py-1.5 rounded-lg transition">Today</button>
+                    <button onclick="setQuickDate('tomorrow')" class="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold px-2 py-1.5 rounded-lg transition">Tomorrow</button>
+                </div>
+                <select id="filterDriver" onchange="renderTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700">
+                    <option value="">All Drivers</option>
+                </select>
+                <select id="filterStatus" onchange="renderTable()" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700">
+                    <option value="">All Statuses</option>
+                    <option value="Confirmed">Confirmed</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                </select>
+                <input type="text" id="filterSearch" onkeyup="renderTable()" placeholder="Search client, route, ID..." class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm text-slate-700 flex-1 min-w-[180px]">
+                <button onclick="resetFilters()" class="text-xs text-slate-500 hover:text-slate-800 underline px-2">Clear</button>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="exportHotelStatement()" class="text-xs bg-amber-100 text-amber-900 hover:bg-amber-200 font-bold px-3 py-2 rounded-lg transition flex items-center gap-1">
+                    <i class="fa-solid fa-receipt"></i> Partner Statement
+                </button>
+            </div>
+        </div>
+
+        <!-- Bookings Table -->
+        <div class="bg-white rounded-xl shadow-sm overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase tracking-wider">
+                        <th class="p-3">ID</th>
+                        <th class="p-3">Date & Time</th>
+                        <th class="p-3">Client & Route</th>
+                        <th class="p-3">Arrival</th>
+                        <th class="p-3">Pax</th>
+                        <th class="p-3">Driver & Vehicle</th>
+                        <th class="p-3">Channel</th>
+                        <th class="p-3">Status</th>
+                        <th class="p-3">Payment</th>
+                        <th class="p-3 text-right">Gross</th>
+                        <th class="p-3 text-right text-rose-600">Fee</th>
+                        <th class="p-3 text-right text-emerald-600">Net</th>
+                        <th class="p-3 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="bookingsTableBody" class="divide-y divide-slate-100 text-sm text-slate-700"></tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- MODAL: Booking -->
+    <div id="bookingModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h3 id="bookingModalTitle" class="text-lg font-bold text-slate-800">New Transfer / Tour Booking</h3>
+                <button onclick="closeBookingModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="bookingForm" onsubmit="saveBooking(event)" class="space-y-4">
+                <input type="hidden" id="bEditIndex" value="-1">
+                <div class="bg-amber-50 p-3 rounded-xl border border-amber-200">
+                    <label class="block text-xs font-bold text-amber-900 mb-1"><i class="fa-solid fa-bolt mr-1"></i> Quick Tariff Preset</label>
+                    <select id="bPresetRoute" onchange="applyPresetRoute()" class="w-full border border-amber-300 bg-white rounded-lg p-2 text-sm font-medium">
+                        <option value="">-- Manual entry --</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="date" id="bDate" required class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Time</label><input type="time" id="bTime" required class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Pickup</label><input type="text" id="bPickup" onchange="tryAutoUpdatePricing()" required class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Drop-off</label><input type="text" id="bDropoff" onchange="tryAutoUpdatePricing()" required class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Client Name</label><input type="text" id="bClientName" required class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Phone / WhatsApp</label><input type="text" id="bClientPhone" class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Arrival</label><input type="text" id="bFlightFerry" class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Channel</label><select id="bChannel" class="w-full border border-slate-300 rounded-lg p-2 text-sm"></select></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Status</label><select id="bStatus" class="w-full border border-slate-300 rounded-lg p-2 text-sm"><option value="Confirmed">Confirmed</option><option value="Pending">Pending</option><option value="Completed">Completed</option><option value="Cancelled">Cancelled</option></select></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Pax</label><input type="number" id="bPax" min="1" value="2" onchange="onPaxChange()" required class="w-full border border-slate-300 rounded-lg p-2 text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Vehicle</label><select id="bVehicle" onchange="onVehicleChange()" class="w-full border border-slate-300 rounded-lg p-2 text-sm bg-slate-50 font-medium"></select></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Driver</label><select id="bDriver" class="w-full border border-slate-300 rounded-lg p-2 text-sm"></select></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Payment</label><select id="bPayment" class="w-full border border-slate-300 rounded-lg p-2 text-sm font-semibold"><option value="Paid">Paid</option><option value="Unpaid">Unpaid</option><option value="Voucher / Hotel">Voucher / Hotel</option></select></div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 bg-slate-50 p-3 rounded-xl border items-center">
+                    <div><label class="block text-xs font-semibold text-slate-700 mb-1">Gross (€)</label><input type="number" id="bGross" step="1" value="50" onkeyup="calcNetInModal()" onchange="calcNetInModal()" class="w-full border rounded-lg p-2 text-sm font-bold"></div>
+                    <div><label class="block text-xs font-semibold text-rose-600 mb-1">Fee (€)</label><input type="number" id="bFee" step="1" value="10" onkeyup="calcNetInModal()" onchange="calcNetInModal()" class="w-full border rounded-lg p-2 text-sm font-bold text-rose-600"></div>
+                    <div class="text-right"><span class="block text-xs text-slate-500 mb-1">Net Income</span><span id="bModalNetDisplay" class="text-lg font-extrabold text-emerald-600">€40</span></div>
+                </div>
+                <div class="flex justify-end gap-3 pt-3 border-t">
+                    <button type="button" onclick="closeBookingModal()" class="px-4 py-2 text-sm text-slate-600">Cancel</button>
+                    <button type="submit" class="px-5 py-2 text-sm bg-slate-900 text-white font-semibold rounded-lg">Save Booking</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Settings -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto flex flex-col">
+            <div class="flex justify-between items-center mb-4 border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-sliders text-amber-500"></i> Settings & Parameterization</h3>
+                <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="flex border-b mb-4 gap-2 overflow-x-auto">
+                <button onclick="switchTab('routes')" id="tabBtn-routes" class="py-2 px-4 font-semibold text-sm border-b-2 border-amber-500 text-amber-600 whitespace-nowrap">Routes</button>
+                <button onclick="switchTab('vehicles')" id="tabBtn-vehicles" class="py-2 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 whitespace-nowrap">Vehicles</button>
+                <button onclick="switchTab('drivers')" id="tabBtn-drivers" class="py-2 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 whitespace-nowrap">Drivers</button>
+                <button onclick="switchTab('channels')" id="tabBtn-channels" class="py-2 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 whitespace-nowrap">Partners</button>
+            </div>
+            <div id="tabContent-routes" class="space-y-4">
+                <div class="bg-slate-50 p-3 rounded-xl border grid grid-cols-1 sm:grid-cols-5 gap-2 items-center">
+                    <input type="text" id="cfgPickup" placeholder="Pickup" class="border rounded-lg p-2 text-sm">
+                    <input type="text" id="cfgDropoff" placeholder="Drop-off" class="border rounded-lg p-2 text-sm">
+                    <select id="cfgVehSelect" class="border rounded-lg p-2 text-sm bg-white"></select>
+                    <input type="number" id="cfgGross" placeholder="Gross" class="border rounded-lg p-2 text-sm">
+                    <div class="flex gap-1"><input type="number" id="cfgFee" placeholder="Fee" class="border rounded-lg p-2 text-sm w-full"><button onclick="saveConfigRoute()" class="bg-amber-500 font-bold px-3 py-2 rounded-lg text-sm"><i class="fa-solid fa-plus"></i></button></div>
+                </div>
+                <div class="max-h-64 overflow-y-auto border rounded-xl"><table class="w-full text-left text-sm"><tbody id="cfgRoutesTableBody"></tbody></table></div>
+            </div>
+            <div id="tabContent-vehicles" class="space-y-4 hidden">
+                <div class="bg-slate-50 p-3 rounded-xl border grid grid-cols-1 sm:grid-cols-4 gap-2 items-center">
+                    <input type="text" id="cfgVehCode" placeholder="Code" class="border rounded-lg p-2 text-sm">
+                    <input type="text" id="cfgVehName" placeholder="Description" class="border rounded-lg p-2 text-sm">
+                    <input type="number" id="cfgVehCap" placeholder="Capacity" class="border rounded-lg p-2 text-sm">
+                    <button onclick="saveConfigVehicle()" class="bg-amber-500 font-bold px-4 py-2 rounded-lg text-sm">Add Vehicle</button>
+                </div>
+                <ul id="cfgVehiclesList" class="space-y-2 max-h-60 overflow-y-auto"></ul>
+            </div>
+            <div id="tabContent-drivers" class="space-y-4 hidden">
+                <div class="bg-slate-50 p-3 rounded-xl border grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                    <input type="text" id="cfgDriverName" placeholder="Name" class="border rounded-lg p-2 text-sm">
+                    <input type="text" id="cfgDriverPhone" placeholder="WhatsApp (+30...)" class="border rounded-lg p-2 text-sm">
+                    <button onclick="saveConfigDriver()" class="bg-amber-500 font-bold px-4 py-2 rounded-lg text-sm">Add Driver</button>
+                </div>
+                <ul id="cfgDriversList" class="space-y-2 max-h-60 overflow-y-auto"></ul>
+            </div>
+            <div id="tabContent-channels" class="space-y-4 hidden">
+                <div class="bg-slate-50 p-3 rounded-xl border flex gap-2 items-center">
+                    <input type="text" id="cfgChannelName" placeholder="Partner Name" class="flex-1 border rounded-lg p-2 text-sm">
+                    <button onclick="saveConfigChannel()" class="bg-slate-900 text-white font-semibold px-4 py-2 rounded-lg text-sm">Add Partner</button>
+                </div>
+                <ul id="cfgChannelsList" class="space-y-2 max-h-60 overflow-y-auto"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Manifest -->
+    <div id="manifestModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-list-check mr-2 text-amber-500"></i>Driver Daily Manifest</h3>
+                <button onclick="closeManifestModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="flex gap-3 items-center">
+                <label class="text-xs font-semibold text-slate-600">Driver:</label>
+                <select id="manifestDriverSelect" onchange="generateDriverManifestText()" class="border rounded-lg p-2 text-sm flex-1 font-medium bg-slate-50"></select>
+            </div>
+            <textarea id="manifestText" rows="10" class="w-full p-3 border rounded-lg text-sm font-mono bg-slate-50 focus:outline-none" readonly></textarea>
+            <div class="flex justify-between items-center pt-2">
+                <button onclick="window.print()" class="px-4 py-2 text-sm bg-slate-900 text-white rounded-lg">Print</button>
+                <div class="flex gap-2">
+                    <button onclick="sendManifestWhatsApp()" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg"><i class="fa-brands fa-whatsapp"></i> Send via WhatsApp</button>
+                    <button onclick="copyManifest()" class="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg">Copy</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Manager Report -->
+    <div id="managerReportModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-chart-pie text-sky-600 mr-2"></i>Manager Daily Report</h3>
+                <button onclick="closeManagerReportModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="managerReportContent" class="space-y-3 text-sm text-slate-700 bg-slate-50 p-4 rounded-xl border"></div>
+            <div class="flex justify-end pt-2"><button onclick="closeManagerReportModal()" class="px-4 py-2 text-sm bg-slate-900 text-white rounded-lg">Close</button></div>
+        </div>
+    </div>
+
+    <!-- MODAL: Voucher -->
+    <div id="voucherModal" class="fixed inset-0 bg-black/50 hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl space-y-4">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-lg font-bold text-slate-800"><i class="fa-solid fa-ticket text-amber-500 mr-2"></i>Voucher</h3>
+                <button onclick="closeVoucherModal()" class="text-slate-400 hover:text-slate-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="printableVoucher" class="p-5 border rounded-xl bg-slate-50 space-y-3 text-sm">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <span class="font-bold text-base"><i class="fa-solid fa-bag-shopping text-amber-500"></i> Travel Bag Sifnos</span>
+                    <span id="vouchId" class="font-mono text-xs bg-slate-200 px-2 py-1 rounded">TB-000</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs text-slate-600">
+                    <div><strong>Date:</strong> <span id="vouchDate"></span></div>
+                    <div><strong>Time:</strong> <span id="vouchTime"></span></div>
+                </div>
+                <div class="bg-white p-3 rounded-lg border space-y-1">
+                    <div class="text-xs uppercase text-slate-400 font-semibold">Client</div>
+                    <div id="vouchClient" class="font-bold text-base"></div>
+                    <div id="vouchPhone" class="text-xs text-slate-600"></div>
+                </div>
+                <div class="bg-white p-3 rounded-lg border space-y-1">
+                    <div class="text-xs uppercase text-slate-400 font-semibold">Route</div>
+                    <div class="font-medium text-slate-800"><i class="fa-solid fa-location-dot text-amber-500"></i> <span id="vouchRoute"></span></div>
+                    <div class="text-xs text-slate-600"><strong>Arrival:</strong> <span id="vouchFerry"></span> | <strong>Pax:</strong> <span id="vouchPax"></span></div>
+                </div>
+                <div class="bg-white p-3 rounded-lg border space-y-1 text-xs">
+                    <div><strong>Driver:</strong> <span id="vouchDriver" class="font-semibold"></span> (<span id="vouchVehicle"></span>)</div>
+                    <div><strong>Partner:</strong> <span id="vouchChannel"></span></div>
+                </div>
+            </div>
+            <div class="flex justify-between pt-2">
+                <button onclick="window.print()" class="px-4 py-2 text-sm bg-slate-900 text-white rounded-lg"><i class="fa-solid fa-print"></i> Print</button>
+                <button onclick="sendClientWhatsApp()" class="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg"><i class="fa-brands fa-whatsapp"></i> Send to Client</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script>
+        const API_KEY = "$2a$10$nqINqtiSTe1Q9ubzmfV4ZeqR4msgg7ipz6qQ8kVvLcLLml2MIS3x2";
+        const BIN_ID = "6ac0d247ffd5d1605348aae3";
+
+        let appRoutes = [];
+        let appVehicles = [];
+        let appDrivers = [];
+        let appChannels = [];
+        let appBookings = [];
+        let currentVoucherBooking = null;
+
+        async function fetchDataFromCloud() {
+            document.getElementById('syncIndicator').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Syncing...';
+            try {
+                let res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': API_KEY }
+                });
+                let json = await res.json();
+                let data = json.record;
+
+                appRoutes = data.routes || [];
+                appVehicles = data.vehicles || [];
+                appDrivers = data.drivers || [];
+                appChannels = data.channels || [];
+                appBookings = data.bookings || [];
+
+                if(appRoutes.length === 0) loadFallbackData();
+
+                saveToLocalCache();
+                populateAllDropdowns();
+                renderTable();
+                document.getElementById('syncIndicator').innerHTML = '<i class="fa-solid fa-cloud"></i> Synced';
+            } catch(e) {
+                loadFallbackData();
+                document.getElementById('syncIndicator').innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Offline';
+            }
+        }
+
+        async function saveToCloud() {
+            document.getElementById('syncIndicator').innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+            let payload = {
+                routes: appRoutes,
+                vehicles: appVehicles,
+                drivers: appDrivers,
+                channels: appChannels,
+                bookings: appBookings
+            };
+
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': API_KEY
+                    },
+                    body: JSON.stringify(payload)
+                });
+                document.getElementById('syncIndicator').innerHTML = '<i class="fa-solid fa-cloud"></i> Synced';
+            } catch(e) {
+                console.error("Save error", e);
+                document.getElementById('syncIndicator').innerHTML = '<i class="fa-solid fa-triangle-exclamation text-amber-400"></i> Save Error';
+            }
+            saveToLocalCache();
+        }
+
+        function loadFallbackData() {
+            appRoutes = JSON.parse(localStorage.getItem('tb_routes')) || [{ id: 1, pickup: "Vathi", dropoff: "Kamares", vehicle: "S2", gross: 65, fee: 10 }];
+            appVehicles = JSON.parse(localStorage.getItem('tb_vehicles')) || [{ code: "S1", name: "Sedan", capacity: 4 }, { code: "S2", name: "Mini Bus", capacity: 12 }];
+            appDrivers = JSON.parse(localStorage.getItem('tb_drivers')) || [{ name: "CHRISTOS GRIPIOTIS", phone: "+306900000001" }];
+            appChannels = JSON.parse(localStorage.getItem('tb_channels')) || ["Direct", "EUTOPIA SUITES"];
+            appBookings = JSON.parse(localStorage.getItem('tb_bookings')) || [];
+            populateAllDropdowns();
+            renderTable();
+        }
+
+        function saveToLocalCache() {
+            localStorage.setItem('tb_routes', JSON.stringify(appRoutes));
+            localStorage.setItem('tb_vehicles', JSON.stringify(appVehicles));
+            localStorage.setItem('tb_drivers', JSON.stringify(appDrivers));
+            localStorage.setItem('tb_channels', JSON.stringify(appChannels));
+            localStorage.setItem('tb_bookings', JSON.stringify(appBookings));
+        }
+
+        function saveAllState() {
+            saveToLocalCache();
+            saveToCloud();
+            populateAllDropdowns();
+        }
+
+        function populateAllDropdowns() {
+            const filterDriver = document.getElementById('filterDriver');
+            let curDrv = filterDriver.value;
+            filterDriver.innerHTML = '<option value="">All Drivers</option>';
+            appDrivers.forEach(d => filterDriver.innerHTML += `<option value="${d.name}">${d.name}</option>`);
+            filterDriver.value = curDrv;
+
+            const manDrv = document.getElementById('manifestDriverSelect');
+            if(manDrv) {
+                let curMan = manDrv.value;
+                manDrv.innerHTML = '';
+                appDrivers.forEach(d => manDrv.innerHTML += `<option value="${d.name}">${d.name}</option>`);
+                if(curMan) manDrv.value = curMan;
+            }
+
+            const bDriver = document.getElementById('bDriver');
+            bDriver.innerHTML = '';
+            appDrivers.forEach(d => bDriver.innerHTML += `<option value="${d.name}">${d.name}</option>`);
+
+            const bChannel = document.getElementById('bChannel');
+            bChannel.innerHTML = '';
+            appChannels.forEach(c => bChannel.innerHTML += `<option value="${c}">${c}</option>`);
+
+            const bVehicle = document.getElementById('bVehicle');
+            bVehicle.innerHTML = '';
+            appVehicles.forEach(v => bVehicle.innerHTML += `<option value="${v.code}">${v.code} (${v.name})</option>`);
+
+            const cfgVehSelect = document.getElementById('cfgVehSelect');
+            if(cfgVehSelect) {
+                cfgVehSelect.innerHTML = '';
+                appVehicles.forEach(v => cfgVehSelect.innerHTML += `<option value="${v.code}">${v.code} (${v.name})</option>`);
+            }
+
+            const bPresetRoute = document.getElementById('bPresetRoute');
+            bPresetRoute.innerHTML = '<option value="">-- Manual entry --</option>';
+            appRoutes.forEach((r, idx) => {
+                bPresetRoute.innerHTML += `<option value="${idx}">${r.pickup} &rarr; ${r.dropoff} [${r.vehicle || 'All'}] (Gross: €${r.gross})</option>`;
+            });
+        }
+
+        function setQuickDate(type) {
+            let d = new Date();
+            if(type === 'tomorrow') d.setDate(d.getDate() + 1);
+            document.getElementById('filterDate').value = d.toISOString().split('T')[0];
+            renderTable();
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('bookingsTableBody');
+            tbody.innerHTML = '';
+
+            let dateVal = document.getElementById('filterDate').value;
+            let driverVal = document.getElementById('filterDriver').value;
+            let statusVal = document.getElementById('filterStatus').value;
+            let searchVal = document.getElementById('filterSearch').value.toLowerCase().trim();
+
+            let filtered = appBookings.filter(b => {
+                let mDate = dateVal ? b.date === dateVal : true;
+                let mDriver = driverVal ? b.driver === driverVal : true;
+                let mStatus = statusVal ? b.status === statusVal : true;
+                let mSearch = searchVal ? (
+                    b.id.toLowerCase().includes(searchVal) ||
+                    b.clientName.toLowerCase().includes(searchVal) ||
+                    (b.pickup + " " + b.dropoff).toLowerCase().includes(searchVal) ||
+                    b.channel.toLowerCase().includes(searchVal)
+                ) : true;
+                return mDate && mDriver && mStatus && mSearch;
+            });
+
+            let sumGross = 0, sumFee = 0, sumNet = 0;
+
+            filtered.forEach((b) => {
+                let net = (parseFloat(b.gross) || 0) - (parseFloat(b.fee) || 0);
+                if(b.status !== 'Cancelled') {
+                    sumGross += parseFloat(b.gross) || 0;
+                    sumFee += parseFloat(b.fee) || 0;
+                    sumNet += net;
+                }
+
+                let statusBadge = b.status === 'Confirmed' ? 'bg-sky-100 text-sky-800' : (b.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800');
+                let payBadge = b.payment === 'Unpaid' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800';
+                let realIndex = appBookings.indexOf(b);
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-50 border-b text-sm">
+                        <td class="p-3 font-mono text-xs font-semibold">${b.id}</td>
+                        <td class="p-3 whitespace-nowrap text-xs">${b.date}<br>${b.time}</td>
+                        <td class="p-3"><strong class="text-slate-900">${b.clientName}</strong><br><span class="text-xs text-slate-500">${b.pickup} &rarr; ${b.dropoff}</span></td>
+                        <td class="p-3 text-xs">${b.flightFerry || '-'}</td>
+                        <td class="p-3 text-xs font-bold">${b.pax} Pax</td>
+                        <td class="p-3 text-xs">${b.driver}<br><span class="text-slate-400">${b.vehicle}</span></td>
+                        <td class="p-3 text-xs"><span class="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">${b.channel}</span></td>
+                        <td class="p-3"><span class="px-2 py-1 rounded-full text-xs font-semibold ${statusBadge}">${b.status}</span></td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded text-xs font-semibold ${payBadge}">${b.payment || 'Paid'}</span></td>
+                        <td class="p-3 text-right font-bold">€${b.gross}</td>
+                        <td class="p-3 text-right font-bold text-rose-600">€${b.fee}</td>
+                        <td class="p-3 text-right font-extrabold text-emerald-600">€${net}</td>
+                        <td class="p-3 text-center whitespace-nowrap">
+                            <button onclick="openVoucherModal(${realIndex})" class="text-sky-600 p-1"><i class="fa-solid fa-ticket"></i></button>
+                            <button onclick="cloneBooking(${realIndex})" class="text-amber-600 p-1 ml-1"><i class="fa-solid fa-copy"></i></button>
+                            <button onclick="editBooking(${realIndex})" class="text-slate-600 p-1 ml-1"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteBooking(${realIndex})" class="text-rose-600 p-1 ml-1"><i class="fa-solid fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('statTotalCount').innerText = filtered.length;
+            document.getElementById('statTotalGross').innerText = '€' + sumGross;
+            document.getElementById('statTotalFee').innerText = '€' + sumFee;
+            document.getElementById('statTotalNet').innerText = '€' + sumNet;
+        }
+
+        function resetFilters() {
+            document.getElementById('filterDate').value = '';
+            document.getElementById('filterDriver').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterSearch').value = '';
+            renderTable();
+        }
+
+        function cloneBooking(index) {
+            let cloned = { ...appBookings[index] };
+            cloned.id = 'TB-' + Math.floor(100 + Math.random() * 900);
+            appBookings.unshift(cloned);
+            saveAllState();
+            renderTable();
+        }
+
+        function openVoucherModal(index) {
+            currentVoucherBooking = appBookings[index];
+            let b = currentVoucherBooking;
+            document.getElementById('vouchId').innerText = b.id;
+            document.getElementById('vouchDate').innerText = b.date;
+            document.getElementById('vouchTime').innerText = b.time;
+            document.getElementById('vouchClient').innerText = b.clientName;
+            document.getElementById('vouchPhone').innerText = b.clientPhone ? 'Phone: ' + b.clientPhone : '';
+            document.getElementById('vouchRoute').innerText = `${b.pickup} ➔ ${b.dropoff}`;
+            document.getElementById('vouchFerry').innerText = b.flightFerry || '-';
+            document.getElementById('vouchPax').innerText = b.pax;
+            document.getElementById('vouchDriver').innerText = b.driver;
+            document.getElementById('vouchVehicle').innerText = b.vehicle;
+            document.getElementById('vouchChannel').innerText = b.channel;
+            document.getElementById('voucherModal').classList.remove('hidden');
+            document.getElementById('voucherModal').classList.add('flex');
+        }
+
+        function closeVoucherModal() { document.getElementById('voucherModal').classList.remove('flex'); document.getElementById('voucherModal').classList.add('hidden'); }
+
+        function sendClientWhatsApp() {
+            if(!currentVoucherBooking || !currentVoucherBooking.clientPhone) return alert("No client phone.");
+            let b = currentVoucherBooking;
+            let msg = `Hello ${b.clientName}! Your Transfer Voucher (${b.id}) with Travel Bag Sifnos: Date ${b.date} at ${b.time}, from ${b.pickup} to ${b.dropoff}. Driver: ${b.driver} (${b.vehicle}).`;
+            window.open(`https://wa.me/${b.clientPhone.replace(/[^0-9+]/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+        }
+
+        function openBookingModal(editIdx = -1) {
+            document.getElementById('bookingModal').classList.remove('hidden');
+            document.getElementById('bookingModal').classList.add('flex');
+            populateAllDropdowns();
+
+            if(editIdx >= 0) {
+                let b = appBookings[editIdx];
+                document.getElementById('bookingModalTitle').innerText = `Edit Booking (${b.id})`;
+                document.getElementById('bEditIndex').value = editIdx;
+                document.getElementById('bDate').value = b.date;
+                document.getElementById('bTime').value = b.time;
+                document.getElementById('bPickup').value = b.pickup;
+                document.getElementById('bDropoff').value = b.dropoff;
+                document.getElementById('bClientName').value = b.clientName;
+                document.getElementById('bClientPhone').value = b.clientPhone || '';
+                document.getElementById('bFlightFerry').value = b.flightFerry || '';
+                document.getElementById('bChannel').value = b.channel;
+                document.getElementById('bStatus').value = b.status;
+                document.getElementById('bPayment').value = b.payment || 'Paid';
+                document.getElementById('bPax').value = b.pax;
+                document.getElementById('bVehicle').value = b.vehicle;
+                document.getElementById('bDriver').value = b.driver;
+                document.getElementById('bGross').value = b.gross;
+                document.getElementById('bFee').value = b.fee;
+            } else {
+                document.getElementById('bookingModalTitle').innerText = 'New Booking';
+                document.getElementById('bEditIndex').value = -1;
+                document.getElementById('bDate').value = document.getElementById('filterDate').value || new Date().toISOString().split('T')[0];
+                document.getElementById('bTime').value = "10:00";
+                document.getElementById('bPickup').value = "Vathi";
+                document.getElementById('bDropoff').value = "Kamares";
+                document.getElementById('bClientName').value = "";
+                document.getElementById('bClientPhone').value = "";
+                document.getElementById('bFlightFerry').value = "";
+                document.getElementById('bPayment').value = "Paid";
+                document.getElementById('bPax').value = "2";
+                document.getElementById('bGross').value = "50";
+                document.getElementById('bFee').value = "10";
+            }
+            calcNetInModal();
+        }
+
+        function closeBookingModal() { document.getElementById('bookingModal').classList.remove('flex'); document.getElementById('bookingModal').classList.add('hidden'); }
+        function editBooking(index) { openBookingModal(index); }
+        function deleteBooking(index) { if(confirm("Delete?")) { appBookings.splice(index, 1); saveAllState(); renderTable(); } }
+
+        function calcNetInModal() {
+            let gross = parseFloat(document.getElementById('bGross').value) || 0;
+            let fee = parseFloat(document.getElementById('bFee').value) || 0;
+            document.getElementById('bModalNetDisplay').innerText = '€' + (gross - fee);
+        }
+
+        function applyPresetRoute() {
+            let idx = document.getElementById('bPresetRoute').value;
+            if(idx === "") return;
+            let r = appRoutes[idx];
+            document.getElementById('bPickup').value = r.pickup;
+            document.getElementById('bDropoff').value = r.dropoff;
+            if(r.vehicle) document.getElementById('bVehicle').value = r.vehicle;
+            document.getElementById('bGross').value = r.gross;
+            document.getElementById('bFee').value = r.fee;
+            calcNetInModal();
+        }
+
+        function tryAutoUpdatePricing() {
+            let p = document.getElementById('bPickup').value.trim().toLowerCase();
+            let d = document.getElementById('bDropoff').value.trim().toLowerCase();
+            let v = document.getElementById('bVehicle').value;
+            let found = appRoutes.find(r => r.pickup.toLowerCase() === p && r.dropoff.toLowerCase() === d && (r.vehicle === v || !r.vehicle));
+            if(found) {
+                document.getElementById('bGross').value = found.gross;
+                document.getElementById('bFee').value = found.fee;
+                calcNetInModal();
+            }
+        }
+
+        function onPaxChange() {
+            let pax = parseInt(document.getElementById('bPax').value) || 1;
+            let matched = appVehicles.find(veh => veh.capacity >= pax);
+            if(matched) { document.getElementById('bVehicle').value = matched.code; tryAutoUpdatePricing(); }
+        }
+        function onVehicleChange() { tryAutoUpdatePricing(); }
+
+        function saveBooking(e) {
+            e.preventDefault();
+            let editIdx = parseInt(document.getElementById('bEditIndex').value);
+            let data = {
+                id: editIdx >= 0 ? appBookings[editIdx].id : 'TB-' + Math.floor(100 + Math.random() * 900),
+                date: document.getElementById('bDate').value,
+                time: document.getElementById('bTime').value,
+                pickup: document.getElementById('bPickup').value,
+                dropoff: document.getElementById('bDropoff').value,
+                clientName: document.getElementById('bClientName').value,
+                clientPhone: document.getElementById('bClientPhone').value,
+                flightFerry: document.getElementById('bFlightFerry').value,
+                pax: parseInt(document.getElementById('bPax').value) || 1,
+                driver: document.getElementById('bDriver').value,
+                vehicle: document.getElementById('bVehicle').value,
+                channel: document.getElementById('bChannel').value,
+                status: document.getElementById('bStatus').value,
+                payment: document.getElementById('bPayment').value,
+                gross: parseFloat(document.getElementById('bGross').value) || 0,
+                fee: parseFloat(document.getElementById('bFee').value) || 0
+            };
+            if(editIdx >= 0) appBookings[editIdx] = data;
+            else appBookings.unshift(data);
+            saveAllState();
+            closeBookingModal();
+            renderTable();
+        }
+
+        // Settings
+        function openSettingsModal(tab = 'routes') {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            document.getElementById('settingsModal').classList.add('flex');
+            switchTab(tab);
+            renderConfigLists();
+        }
+        function closeSettingsModal() { document.getElementById('settingsModal').classList.remove('flex'); document.getElementById('settingsModal').classList.add('hidden'); }
+
+        function switchTab(tabName) {
+            ['routes', 'vehicles', 'drivers', 'channels'].forEach(t => {
+                document.getElementById(`tabContent-${t}`).classList.add('hidden');
+                document.getElementById(`tabBtn-${t}`).className = "py-2 px-4 font-semibold text-sm border-b-2 border-transparent text-slate-500 whitespace-nowrap";
+            });
+            document.getElementById(`tabContent-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tabBtn-${tabName}`).className = "py-2 px-4 font-semibold text-sm border-b-2 border-amber-500 text-amber-600 whitespace-nowrap";
+        }
+
+        function renderConfigLists() {
+            let rtBody = document.getElementById('cfgRoutesTableBody');
+            rtBody.innerHTML = '';
+            appRoutes.forEach((r, idx) => {
+                rtBody.innerHTML += `<tr class="border-b"><td class="p-2">${r.pickup} &rarr; ${r.dropoff} (${r.vehicle || 'All'})</td><td class="p-2 text-right font-bold">€${r.gross}</td><td class="p-2 text-center"><button onclick="deleteConfigRoute(${idx})" class="text-rose-600"><i class="fa-solid fa-trash"></i></button></td></tr>`;
+            });
+            let vList = document.getElementById('cfgVehiclesList');
+            vList.innerHTML = '';
+            appVehicles.forEach((v, idx) => {
+                vList.innerHTML += `<li class="flex justify-between items-center bg-slate-50 p-2.5 rounded border text-sm"><span><strong>${v.code}</strong> - ${v.name} (${v.capacity} Pax)</span><button onclick="deleteConfigVehicle(${idx})" class="text-rose-600"><i class="fa-solid fa-trash"></i></button></li>`;
+            });
+            let dList = document.getElementById('cfgDriversList');
+            dList.innerHTML = '';
+            appDrivers.forEach((d, idx) => {
+                dList.innerHTML += `<li class="flex justify-between items-center bg-slate-50 p-2.5 rounded border text-sm"><span><strong>${d.name}</strong> (${d.phone || 'No phone'})</span><button onclick="deleteConfigDriver(${idx})" class="text-rose-600"><i class="fa-solid fa-trash"></i></button></li>`;
+            });
+            let cList = document.getElementById('cfgChannelsList');
+            cList.innerHTML = '';
+            appChannels.forEach((c, idx) => {
+                cList.innerHTML += `<li class="flex justify-between items-center bg-slate-50 p-2.5 rounded border text-sm"><span>${c}</span><button onclick="deleteConfigChannel(${idx})" class="text-rose-600"><i class="fa-solid fa-trash"></i></button></li>`;
+            });
+        }
+
+        function saveConfigRoute() {
+            let p = document.getElementById('cfgPickup').value.trim(), d = document.getElementById('cfgDropoff').value.trim();
+            let v = document.getElementById('cfgVehSelect').value, g = parseFloat(document.getElementById('cfgGross').value) || 0, f = parseFloat(document.getElementById('cfgFee').value) || 0;
+            if(!p || !d) return;
+            appRoutes.push({ id: Date.now(), pickup: p, dropoff: d, vehicle: v, gross: g, fee: f });
+            saveAllState();
+            renderConfigLists();
+            document.getElementById('cfgPickup').value = ''; document.getElementById('cfgDropoff').value = '';
+        }
+        function deleteConfigRoute(idx) { appRoutes.splice(idx, 1); saveAllState(); renderConfigLists(); }
+        function saveConfigVehicle() {
+            let c = document.getElementById('cfgVehCode').value.trim(), n = document.getElementById('cfgVehName').value.trim(), cap = parseInt(document.getElementById('cfgVehCap').value) || 4;
+            if(!c) return;
+            appVehicles.push({ code: c, name: n, capacity: cap });
+            saveAllState(); renderConfigLists();
+            document.getElementById('cfgVehCode').value = ''; document.getElementById('cfgVehName').value = '';
+        }
+        function deleteConfigVehicle(idx) { appVehicles.splice(idx, 1); saveAllState(); renderConfigLists(); }
+        function saveConfigDriver() {
+            let name = document.getElementById('cfgDriverName').value.trim(), phone = document.getElementById('cfgDriverPhone').value.trim();
+            if(!name) return;
+            appDrivers.push({ name: name.toUpperCase(), phone });
+            saveAllState(); renderConfigLists();
+            document.getElementById('cfgDriverName').value = ''; document.getElementById('cfgDriverPhone').value = '';
+        }
+        function deleteConfigDriver(idx) { appDrivers.splice(idx, 1); saveAllState(); renderConfigLists(); }
+        function saveConfigChannel() {
+            let name = document.getElementById('cfgChannelName').value.trim();
+            if(!name) return;
+            appChannels.push(name.toUpperCase());
+            saveAllState(); renderConfigLists();
+            document.getElementById('cfgChannelName').value = '';
+        }
+        function deleteConfigChannel(idx) { appChannels.splice(idx, 1); saveAllState(); renderConfigLists(); }
+
+        // Manifest & Reports
+        function openManifestModal() { populateAllDropdowns(); generateDriverManifestText(); document.getElementById('manifestModal').classList.remove('hidden'); document.getElementById('manifestModal').classList.add('flex'); }
+        function closeManifestModal() { document.getElementById('manifestModal').classList.remove('flex'); document.getElementById('manifestModal').classList.add('hidden'); }
+
+        function generateDriverManifestText() {
+            let dateVal = document.getElementById('filterDate').value || new Date().toISOString().split('T')[0];
+            let driverName = document.getElementById('manifestDriverSelect').value;
+            let dayBookings = appBookings.filter(b => b.date === dateVal && b.driver === driverName && b.status !== 'Cancelled');
+            let text = `=== TRAVEL BAG SIFNOS - MANIFEST ===\nDriver: ${driverName}\nDate: ${dateVal}\nTransfers: ${dayBookings.length}\n------------------------------------------\n\n`;
+            dayBookings.forEach((b, i) => {
+                text += `${i+1}. [${b.time}] ${b.pickup} ➔ ${b.dropoff}\n   Client: ${b.clientName} (${b.clientPhone || 'No phone'})\n   Pax: ${b.pax} | Arrival: ${b.flightFerry || '-'}\n   Vehicle: ${b.vehicle}\n\n`;
+            });
+            document.getElementById('manifestText').value = text;
+        }
+
+        function copyManifest() { document.getElementById('manifestText').select(); document.execCommand('copy'); alert("Copied!"); }
+        function sendManifestWhatsApp() {
+            let driverName = document.getElementById('manifestDriverSelect').value;
+            let dObj = appDrivers.find(d => d.name === driverName);
+            let text = document.getElementById('manifestText').value;
+            let phone = dObj && dObj.phone ? dObj.phone.replace(/[^0-9+]/g, '') : prompt("Enter driver WhatsApp number:", "+30");
+            if(phone) window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        function openManagerReportModal() {
+            let dateVal = document.getElementById('filterDate').value || new Date().toISOString().split('T')[0];
+            let dayBookings = appBookings.filter(b => b.date === dateVal && b.status !== 'Cancelled');
+            let tGross = 0, tFee = 0, tNet = 0;
+            dayBookings.forEach(b => {
+                let g = parseFloat(b.gross) || 0, f = parseFloat(b.fee) || 0;
+                tGross += g; tFee += f; tNet += (g - f);
+            });
+            let html = `<div><strong>Date:</strong> ${dateVal} | <strong>Bookings:</strong> ${dayBookings.length}</div>
+                <div class="grid grid-cols-3 gap-2 text-center my-3">
+                    <div class="bg-white p-2 rounded border">Gross<br><strong>€${tGross}</strong></div>
+                    <div class="bg-white p-2 rounded border">Fee<br><strong class="text-rose-600">€${tFee}</strong></div>
+                    <div class="bg-white p-2 rounded border">Net<br><strong class="text-emerald-600">€${tNet}</strong></div>
+                </div>`;
+            document.getElementById('managerReportContent').innerHTML = html;
+            document.getElementById('managerReportModal').classList.remove('hidden');
+            document.getElementById('managerReportModal').classList.add('flex');
+        }
+        function closeManagerReportModal() { document.getElementById('managerReportModal').classList.remove('flex'); document.getElementById('managerReportModal').classList.add('hidden'); }
+
+        function exportHotelStatement() {
+            let partner = prompt("Enter Partner / Hotel:", "EUTOPIA SUITES");
+            if(!partner) return;
+            let pBookings = appBookings.filter(b => b.channel.toUpperCase() === partner.toUpperCase() && b.status !== 'Cancelled');
+            let tGross = 0, tFee = 0, txt = `STATEMENT: ${partner.toUpperCase()}\n\n`;
+            pBookings.forEach(b => {
+                tGross += parseFloat(b.gross) || 0; tFee += parseFloat(b.fee) || 0;
+                txt += `${b.date} | ${b.clientName} | ${b.pickup} -> ${b.dropoff} | Gross: €${b.gross} | Comm: €${b.fee}\n`;
+            });
+            txt += `\nTotal Gross: €${tGross} | Total Commission: €${tFee}`;
+            alert(txt);
+        }
+
+        function exportToExcel() {
+            let wsData = [["ID", "Date", "Time", "Pickup", "Dropoff", "Client", "Phone", "Ferry", "Pax", "Driver", "Vehicle", "Channel", "Status", "Payment", "Gross", "Fee", "Net"]];
+            appBookings.forEach(b => {
+                wsData.push([b.id, b.date, b.time, b.pickup, b.dropoff, b.clientName, b.clientPhone, b.flightFerry, b.pax, b.driver, b.vehicle, b.channel, b.status, b.payment, b.gross, b.fee, b.gross - b.fee]);
+            });
+            let wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), "Bookings");
+            XLSX.writeFile(wb, `travel_bag_sifnos_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        window.onload = function() {
+            document.getElementById('filterDate').value = new Date().toISOString().split('T')[0];
+            fetchDataFromCloud();
+        };
+    </script>
+</body>
+</html>
